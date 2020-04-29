@@ -2,10 +2,10 @@ from setuptools import setup
 
 setup(name='imgorderer',
       version='0.1',
-      description='The funniest joke in the world',
+      description='Img orderer',
       url='',
-      author='dinosf',
-      author_email='dinosf@mail.com',
+      author='dimansf',
+      author_email='diman18sf@mail.com',
       license='MIT',
-      packages=['imgorderer', 'nextgen'],
+      packages=['imgorderer'],
       zip_safe=False)
