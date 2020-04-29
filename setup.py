@@ -7,5 +7,5 @@ setup(name='imgorderer',
       author='dimansf',
       author_email='diman18sf@mail.com',
       license='MIT',
-      packages=['imgorderer'],
+      packages=['imgorderer', 'logus'],
       zip_safe=False)
