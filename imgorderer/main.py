@@ -3,23 +3,31 @@ from pathlib import Path
 from shutil import move, copy, rmtree
 import os
 from os.path import join  
+from typing import Dict, List, Tuple
 import sys  
 import re
-from .logger import Logger 
+
 
 
 
 class Program: 
     # images + videios
-    files_extentions = ('jpeg', 'jpg',  'png', 'gif',  'bmp' ) + ('mp4','3gp', 'mpeg') 
+    files_extentions:Tuple = ('jpeg', 'jpg',  'png', 'gif',  'bmp' ) + ('mp4','3gp', 'mpeg') 
+    hashes:Dict[str, List[str]] = None
+    base_dir:str = None
+    copy_dir:str = None
+    logger = None
+    files_extentions:Tuple[str]=None
+    use_ext:bool = False
+    safe_mode:bool = True
 
-    def __init__(self, base_dir:str, copy_dir:str,files_extentions:Tuple[str]=None, logger:Logger = None):
-        """
-            """
-        self.hashes:Dict[str, List[str]] = {}
+    def __init__(self, base_dir:str, copy_dir:str,files_extentions:Tuple[str]=None, logger = None):
+        
+        self.hashes = {}
         self.base_dir = base_dir
         self.copy_dir = copy_dir
-        self.logger = logger.namespace(str(self.__class__))
+        if logger:
+            self.logger = logger.namespace(str(self.__class__))
         self.files_extentions = self.files_extentions + files_extentions if files_extentions else ()
 
     def calc_hash(self, file_path:Path):
@@ -28,7 +36,10 @@ class Program:
             return hh.hexdigest()
 
 
-    def main(self): 
+    def main(self, use_ext:bool=False, safe_mode:bool=True): 
+        self.use_ext = use_ext
+        self.use_ext = safe_mode
+
         print('Группируем файлы по хешу')
         self.accumulate_files(Path(self.base_dir))
 
@@ -38,12 +49,8 @@ class Program:
    
 
     def full_compare(self, file_name, file_name2):
-        f1 = open(file_name, 'rb')
-        f2 = open(file_name2, 'rb')
-        res =  f1.read() == f2.read()
-        f1.close
-        f2.close
-        return res
+        with open(file_name, 'rb') as f1, open(file_name2, 'rb') as  f2:
+            return f1.read() == f2.read()
 
 
     def drain_files(self):
@@ -78,23 +85,28 @@ class Program:
         return grps
         
        
-    def soft_move_file(self, paths:List[str], copy_dir:str):
+    def soft_move_file(self, file_list:List[str], copy_dir:str):
         """
             Перемещаем коллекцию элементов и нумеруем по порядку
             ! неизвестно поведение при несовпадении расширений
             ! и при нескольких расширениях"""
 
-        f1 = Path(paths[0])
+        f1 = Path(file_list[0])
         res = Path(copy_dir)
         if not res.exists(): res.mkdir()
         cc = 1
-        for ff in paths:
+        for ff in file_list:
             if not res.joinpath(f1.name).exists():
-                move(ff, copy_dir)
+                self.move(ff, copy_dir)
             else:
                 cc += 1
-                move(ff, str(res.joinpath(f1.stem +  f'_{str(cc)}' + f1.suffix)))
+                self.move(ff, str(res.joinpath(f1.stem +  f'_{str(cc)}' + f1.suffix)))
 
+    def move(self, src:str, dst:str):
+        if self.safe_mode:
+            copy(src, dst)
+        else:
+            move(src, dst)
 
     def accumulate_files(self, base_dir:Path):
         """
@@ -108,6 +120,8 @@ class Program:
     def is_correct_file(self, path:Path):
         """
             Проверяет является ли файл изображением или видео в нужном формате"""
+        if not self.use_ext:
+            return True
         try:
             self.files_extentions.index(path.suffix[1:])
             return True
