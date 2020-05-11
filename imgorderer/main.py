@@ -14,6 +14,7 @@ class Program:
     # images + videios
     files_extentions:Tuple = ('jpeg', 'jpg',  'png', 'gif',  'bmp' ) + ('mp4','3gp', 'mpeg') 
     hashes:Dict[str, List[str]] = None
+    file_counter:int = 0
     base_dir:str = None
     copy_dir:str = None
     logger = None
@@ -42,6 +43,7 @@ class Program:
 
         print('Группируем файлы по хешу')
         self.accumulate_files(Path(self.base_dir))
+        print(f'Всего файлов найдено: {self.file_counter}')
 
         print('Скидываем все недублированные файлы в общую директорию')
         self.drain_files(self.copy_dir)
@@ -55,7 +57,7 @@ class Program:
 
     def drain_files(self):
         """
-            Обходим и перемещаем файлы в общую папку """
+            Обходим и перемещаем\копируем файлы в общую папку """
         
         for kk in self.hashes:
             if len(self.hashes[kk]) == 1:
@@ -71,9 +73,9 @@ class Program:
              сравнения коллекции обьектов"""
         if len(files) < 1: return
 
-        grps = [ files[0]]
+        grps = [ [files[0]] ]
 
-        for ffs in files:
+        for ffs in files[1:]:
             fl = False
             for grp in grps:
                 if self.full_compare(grp[0], ffs):
@@ -85,22 +87,27 @@ class Program:
         return grps
         
        
-    def soft_move_file(self, file_list:List[str], copy_dir:str):
+    def soft_move_file(self, file_list:List[str], copy_dir:str) -> str:
         """
             Перемещаем коллекцию элементов и нумеруем по порядку
             ! неизвестно поведение при несовпадении расширений
             ! и при нескольких расширениях"""
 
         f1 = Path(file_list[0])
-        res = Path(copy_dir)
-        if not res.exists(): res.mkdir()
+        dst = Path(copy_dir)
+        if not dst.exists(): dst.mkdir()
         cc = 1
         for ff in file_list:
-            if not res.joinpath(f1.name).exists():
-                self.move(ff, copy_dir)
-            else:
+            p = dst.joinpath(f1.name)
+            while p.exists():
                 cc += 1
-                self.move(ff, str(res.joinpath(f1.stem +  f'_{str(cc)}' + f1.suffix)))
+                p = dst.joinpath(f1.stem + f'_{str(cc)}' + f1.suffix)
+            self.move(ff, str(p))
+        self.notifyAbout('Файл скопирован\перемещен:', str(p))
+           
+                
+    def notifyAbout(self, d:str, ms:str):
+        print(f'{d} {ms}')
 
     def move(self, src:str, dst:str):
         if self.safe_mode:
@@ -129,7 +136,7 @@ class Program:
             return False
 
     def put_in_hashtable(self, path:Path):
-        if not is_correct_file(path): return
+        if not self.is_correct_file(path): return
 
         hash = self.calc_hash(path)
         if self.hashes.get(hash) is None:
@@ -137,6 +144,7 @@ class Program:
             self.hashes[hash].append(str(path))
         else:
             self.hashes[hash].append(str(path))
+        self.file_counter += 1
 
 
     
