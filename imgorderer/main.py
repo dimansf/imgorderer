@@ -14,6 +14,7 @@ class Program:
     # images + videios
     files_extentions:Tuple = ('jpeg', 'jpg',  'png', 'gif',  'bmp', 'thumb' ) + ('mp4','3gp', 'mpeg', 'wmv') 
     hashes:Dict[str, List[str]] = None
+    excluded_dst:Path = None
     file_counter:int = 0
     base_dir:str = None
     copy_dir:str = None
@@ -27,6 +28,7 @@ class Program:
         self.hashes = {}
         self.base_dir = base_dir
         self.copy_dir = copy_dir
+        self.excluded_dst = Path(copy_dir).joinpath('excluded')
         if logger:
             self.logger = logger.namespace(str(self.__class__))
         self.files_extentions = self.files_extentions + files_extentions
@@ -89,19 +91,25 @@ class Program:
        
     def soft_move_file(self, file_list:List[str], copy_dir:str) -> str:
         """
-            Перемещаем коллекцию элементов и нумеруем по порядку
-            ! неизвестно поведение при несовпадении расширений
-            ! и при нескольких расширениях"""
+            Перемещаем файлы и именуем по первому имени в коллекции
+            ** файлы не медиа расширений переносим в другую директорию
+            """
 
         f1 = Path(file_list[0])
-        dst = Path(copy_dir)
-        if not dst.exists(): dst.mkdir()
+        base_dst = Path(copy_dir)
+        
         cc = 1
         for ff in file_list:
-            p = dst.joinpath(f1.name)
+            fp = Path(ff)
+            if not self.is_correct_file(fp): 
+                dst = self.excluded_dst
+            else: 
+                dst = base_dst
+            if not dst.exists(): dst.mkdir(parents=True)
+            p = dst.joinpath(f1.stem + fp.suffix)
             while p.exists():
                 cc += 1
-                p = dst.joinpath(f1.stem + f'_{str(cc)}' + f1.suffix)
+                p = dst.joinpath(f1.stem + f'___-{str(cc)}' + fp.suffix)
             self.move(ff, str(p))
         self.notifyAbout('Файл скопирован\перемещен:', str(p))
            
@@ -137,7 +145,7 @@ class Program:
             return False
 
     def put_in_hashtable(self, path:Path):
-        if not self.is_correct_file(path): return
+        
 
         hash = self.calc_hash(path)
         if self.hashes.get(hash) is None:
