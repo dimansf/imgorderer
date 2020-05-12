@@ -12,24 +12,24 @@ import re
 
 class Program: 
     # images + videios
-    files_extentions:Tuple = ('jpeg', 'jpg',  'png', 'gif',  'bmp' ) + ('mp4','3gp', 'mpeg') 
+    files_extentions:Tuple = ('jpeg', 'jpg',  'png', 'gif',  'bmp', 'thumb' ) + ('mp4','3gp', 'mpeg', 'wmv') 
     hashes:Dict[str, List[str]] = None
     file_counter:int = 0
     base_dir:str = None
     copy_dir:str = None
     logger = None
-    files_extentions:Tuple[str]=None
+   
     use_ext:bool = False
     safe_mode:bool = True
 
-    def __init__(self, base_dir:str, copy_dir:str,files_extentions:Tuple[str]=None, logger = None):
+    def __init__(self, base_dir:str, copy_dir:str,files_extentions:Tuple[str]=(), logger = None):
         
         self.hashes = {}
         self.base_dir = base_dir
         self.copy_dir = copy_dir
         if logger:
             self.logger = logger.namespace(str(self.__class__))
-        self.files_extentions = self.files_extentions + files_extentions if files_extentions else ()
+        self.files_extentions = self.files_extentions + files_extentions
 
     def calc_hash(self, file_path:Path):
         with file_path.open('rb') as file1:
@@ -39,7 +39,7 @@ class Program:
 
     def main(self, use_ext:bool=False, safe_mode:bool=True): 
         self.use_ext = use_ext
-        self.use_ext = safe_mode
+        self.safe_mode = safe_mode
 
         print('Группируем файлы по хешу')
         self.accumulate_files(Path(self.base_dir))
@@ -55,16 +55,16 @@ class Program:
             return f1.read() == f2.read()
 
 
-    def drain_files(self):
+    def drain_files(self, copy_dir):
         """
             Обходим и перемещаем\копируем файлы в общую папку """
         
         for kk in self.hashes:
             if len(self.hashes[kk]) == 1:
-                self.soft_move_file(self.hashes[kk], self.copy_dir)
+                self.soft_move_file(self.hashes[kk], copy_dir)
             if len(self.hashes[kk]) > 1:
                 for grp in self.complex_comparision(self.hashes[kk]):
-                    self.soft_move_file(grp, self.copy_dir)
+                    self.soft_move_file(grp, copy_dir)
             
 
     def complex_comparision(self, files:List[str]) -> List[List[str]]:
@@ -129,6 +129,7 @@ class Program:
             Проверяет является ли файл изображением или видео в нужном формате"""
         if not self.use_ext:
             return True
+        
         try:
             self.files_extentions.index(path.suffix[1:])
             return True
