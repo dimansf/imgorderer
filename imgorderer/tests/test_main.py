@@ -25,7 +25,7 @@ class TestProgram(unittest.TestCase):
             rmtree(self.dst)
             [f.unlink() for f in self.src.iterdir() if f.is_file()]
         except:
-            print(f'{self.dst} is not exist or cant erase file')
+            print('')
         
 
     def test_calc_hash(self):
@@ -41,46 +41,71 @@ class TestProgram(unittest.TestCase):
         self.assertTrue(self.program.full_compare(a, b))
         self.assertFalse(self.program.full_compare(a, c))
 
+    
     def test_drain_files(self):
         self.assertTrue(True)
-        
+
+    def test_sub_drain_files(self):
+        self.program.accumulate_files(self.src)
+        self.program.sub_drain_files(self.program.hashes['txt'],
+        self.dst, self.dst.joinpath('dup'))
+        fls = self.file_list(path=self.dst)
+
+        self.assertEqual(len(fls), 2)
+
     def test_complex_comparision(self):
-        fls = self.file_list(self.src, False)
-        res = self.program.complex_comparision(fls)
-        self.assertEqual(len(res), 3)
-        self.assertEqual(len(res[0]), 2)
+        fls = self.file_list()
+        grps = self.program.complex_comparision(fls)
+        self.assertEqual(len(grps), 3)
+        self.assertEqual(len(grps[0]), 2)
     
+    def test_move_groups(self):
+        fls = self.file_list(True)
+        d_a = 'dup'
+        dup:Path = self.dst.joinpath(d_a)
+        self.program.move_groups(fls, self.dst, dup)
+        dstf = self.file_list(path=self.dst)
+        self.assertEqual(len(dstf), 1)
+        dstf = self.file_list(path=dup)
+
+        self.assertEqual(len(dstf), 4)
+
+
     def test_soft_move_file(self):
-        self.program.use_ext = True
-        fls = self.file_list(self.src, False)
-        self.program.soft_move_file(fls, self.dst)
-        fls = [x for x in Path(self.dst).iterdir()]
-        self.assertEqual(len(fls), 2) #file + directory
         
+        fl = self.file_list().pop()
+        self.program.soft_move_file(fl, fl.stem, self.dst)
+        self.program.soft_move_file(fl, fl.stem, self.dst)
+        
+        self.assertEqual(len(self.file_list(path=self.dst)), 2)
+        
+    def test_notifyAbout(self):
+        self.assertTrue(True)
+
     def test_move(self):
         self.assertTrue(True)
     
     def test_accumulate_files(self):
         self.program.accumulate_files(self.src)
-        self.assertEqual(len(self.program.hashes), 3)
+        self.assertEqual(len(self.program.hashes), 2)
+        self.assertTrue(len(self.program.hashes['txt']) == 2)
     
-    def test_is_correct_file(self):
-        self.assertTrue(True)
     
     def test_put_in_hashtable(self):
-        p = self.file_list(self.src).pop()
-        self.program.put_in_hashtable(p)
-        hs = self.program.calc_hash(p)
-        self.assertTrue(self.program.hashes.get(hs, -12) != -12)
+        fls = self.file_list()
+        for f in fls: self.program.put_in_hashtable(f)
+        
+        self.assertFalse(self.program.hashes.get('txt') is None)
+        self.assertEqual(len(self.program.hashes['txt']), 2 )
 
-    def file_list(self, p:str, orig_e:bool=True):
-        if orig_e:
-            return [x for x in Path(self.src).iterdir() if x.is_file()]
+    def file_list(self, str_type:bool=False, path:Path=None):
+        if path is None: path = self.src
+        if not str_type:
+            return [x for x in path.iterdir() if x.is_file()]
         else:
-            return [str(x) for x in Path(self.src).iterdir() if x.is_file()]
+            return [str(x) for x in path.iterdir() if x.is_file()]
 
-    def test_put_in_hashtable(self):
-        pass
+    
 
 
 if __name__ == '__main__':

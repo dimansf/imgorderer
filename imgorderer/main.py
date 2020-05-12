@@ -6,32 +6,28 @@ from os.path import join
 from typing import Dict, List, Tuple
 import sys  
 import re
-
+from random import randint
 
 
 
 class Program: 
     # images + videios
-    files_extentions:Tuple = ('jpeg', 'jpg',  'png', 'gif',  'bmp', 'thumb' ) + ('mp4','3gp', 'mpeg', 'wmv') 
-    hashes:Dict[str, List[str]] = None
-    excluded_dst:Path = None
+    
+    hashes:Dict[str, Dict[str, List[str]]] = None
     file_counter:int = 0
-    base_dir:str = None
-    copy_dir:str = None
-    logger = None
-   
-    use_ext:bool = False
+    base_dir:Path = None
+    copy_dir:Path = None 
+    excluded_dst:Path = None 
     safe_mode:bool = True
 
-    def __init__(self, base_dir:str, copy_dir:str,files_extentions:Tuple[str]=(), logger = None):
-        
+    def __init__(self, base_dir:str, copy_dir:str, safe_mode:bool=True):
+        self.safe_mode = safe_mode
         self.hashes = {}
-        self.base_dir = base_dir
-        self.copy_dir = copy_dir
+        self.base_dir = Path(base_dir)
+        self.copy_dir = Path(copy_dir)
         self.excluded_dst = Path(copy_dir).joinpath('excluded')
-        if logger:
-            self.logger = logger.namespace(str(self.__class__))
-        self.files_extentions = self.files_extentions + files_extentions
+        
+        
 
     def calc_hash(self, file_path:Path):
         with file_path.open('rb') as file1:
@@ -39,12 +35,11 @@ class Program:
             return hh.hexdigest()
 
 
-    def main(self, use_ext:bool=False, safe_mode:bool=True): 
-        self.use_ext = use_ext
+    def main(self,  safe_mode:bool=True):
         self.safe_mode = safe_mode
 
         print('Группируем файлы по хешу')
-        self.accumulate_files(Path(self.base_dir))
+        self.accumulate_files(self.base_dir)
         print(f'Всего файлов найдено: {self.file_counter}')
 
         print('Скидываем все недублированные файлы в общую директорию')
@@ -56,24 +51,29 @@ class Program:
         with open(file_name, 'rb') as f1, open(file_name2, 'rb') as  f2:
             return f1.read() == f2.read()
 
+    def drain_files(self,copy_dir:Path ):
+        for el in self.hashes:
+            cp_dir = copy_dir.joinpath(str(el))
+            dup_dir = cp_dir.joinpath('duplicates')
+            
+            
+            
+            self.sub_drain_files(self.hashes[el], cp_dir, dup_dir)
 
-    def drain_files(self, copy_dir):
+    def sub_drain_files(self, fls:Dict[str, List[str]], cp_dir:Path, dup_dir:Path):
         """
             Обходим и перемещаем\копируем файлы в общую папку """
-        
-        for kk in self.hashes:
-            if len(self.hashes[kk]) == 1:
-                self.soft_move_file(self.hashes[kk], copy_dir)
-            if len(self.hashes[kk]) > 1:
-                for grp in self.complex_comparision(self.hashes[kk]):
-                    self.soft_move_file(grp, copy_dir)
+        for kk in fls:
+            for grp in self.complex_comparision(fls[kk]):
+                self.move_groups(grp, cp_dir, dup_dir)
             
+    
 
     def complex_comparision(self, files:List[str]) -> List[List[str]]:
         """
             Раскидываем по группам на основании полного
              сравнения коллекции обьектов"""
-        if len(files) < 1: return
+        if len(files) == 1: return [files]
 
         grps = [ [files[0]] ]
 
@@ -87,37 +87,37 @@ class Program:
             if not fl:
                 grps.append([ffs])
         return grps
-        
+
+    def move_groups(self, grp:List[str],  cp_dir:Path, dup_dir:Path):
+        f1 = Path(grp.pop())
+        stem = self.soft_move_file(f1, f1.stem, cp_dir)
+        for el in grp:
+            self.soft_move_file(Path(el), stem, dup_dir)
+
+
        
-    def soft_move_file(self, file_list:List[str], copy_dir:str) -> str:
+    def soft_move_file(self, ff:Path, stem:str, cp_dir:Path)-> str:
         """
             Перемещаем файлы и именуем по первому имени в коллекции
             ** файлы не медиа расширений переносим в другую директорию
             """
-
-        f1 = Path(file_list[0])
-        base_dst = Path(copy_dir)
         
-        cc = 1
-        for ff in file_list:
-            fp = Path(ff)
-            if not self.is_correct_file(fp): 
-                dst = self.excluded_dst
-            else: 
-                dst = base_dst
-            if not dst.exists(): dst.mkdir(parents=True)
-            p = dst.joinpath(f1.stem + fp.suffix)
-            while p.exists():
-                cc += 1
-                p = dst.joinpath(f1.stem + f'___-{str(cc)}' + fp.suffix)
-            self.move(ff, str(p))
-        self.notifyAbout('Файл скопирован\перемещен:', str(p))
-           
+        if not cp_dir.exists():  cp_dir.mkdir(parents=True)
+        c = 1
+        fi = cp_dir.joinpath(stem + ff.suffix)
+        while fi.exists():
+            c += 1
+            fi = cp_dir.joinpath(stem + f'___{str(c)}' + ff.suffix)
+        
+        self.move(ff, fi)
+        self.notifyAbout('Файл скопирован\перемещен в :', str(fi))
+        return fi.stem
+         
                 
     def notifyAbout(self, d:str, ms:str):
         print(f'{d} {ms}')
 
-    def move(self, src:str, dst:str):
+    def move(self, src:Path, dst:Path):
         if self.safe_mode:
             copy(src, dst)
         else:
@@ -132,27 +132,16 @@ class Program:
             if d.is_file():
                 self.put_in_hashtable(d)
         
-    def is_correct_file(self, path:Path):
-        """
-            Проверяет является ли файл изображением или видео в нужном формате"""
-        if not self.use_ext:
-            return True
-        
-        try:
-            self.files_extentions.index(path.suffix[1:])
-            return True
-        except:
-            return False
 
-    def put_in_hashtable(self, path:Path):
-        
+    def put_in_hashtable(self, f:Path):
 
-        hash = self.calc_hash(path)
-        if self.hashes.get(hash) is None:
-            self.hashes[hash] = []
-            self.hashes[hash].append(str(path))
-        else:
-            self.hashes[hash].append(str(path))
+        hash = self.calc_hash(f)
+        sfx = f.suffix[1:] if len(f.suffix) > 1 else 'no_ext'
+        if self.hashes.get(sfx) is None: self.hashes[sfx] = {}
+            
+        if self.hashes[sfx].get(hash) is None: self.hashes[sfx][hash] = []
+            
+        self.hashes[sfx][hash].append(str(f))
         self.file_counter += 1
 
 
